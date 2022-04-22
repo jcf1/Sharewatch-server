@@ -7,10 +7,19 @@ const users_1 = require("./src/users");
 const rooms_1 = require("./src/rooms");
 const PORT = process.env.PORT || 5000;
 const router = require('./router');
-const { constants } = require('buffer');
 const app = express();
 const server = http.createServer(app);
 const io = socketio(server);
+const inactivityLimit = 3600000;
+let room_to_last_interaction = new Map();
+setInterval(() => {
+    let now = Date.now();
+    room_to_last_interaction.forEach((t, room) => {
+        if (now - t > inactivityLimit) {
+            io.to(room).emit('inactivity', {});
+        }
+    });
+}, 60000);
 io.on('connection', (socket) => {
     socket.on('get_id', ({}, callback) => {
         socket.emit('socket_id', { id: socket.id });
@@ -18,7 +27,7 @@ io.on('connection', (socket) => {
     socket.on('create', (callback) => {
         const room = (0, rooms_1.createRoom)(socket.id);
         if (room === '') {
-            return callback('No Rooms Available.');
+            return callback();
         }
         if ((0, users_1.getUser)(socket.id) !== null) {
             const old_user = (0, users_1.removeUser)(socket.id);
@@ -38,6 +47,7 @@ io.on('connection', (socket) => {
                 io.to(old_data.room).emit('roomData', old_data);
             }
         }
+        room_to_last_interaction.set(room, Date.now());
         const user = (0, users_1.addUser)(socket.id, room);
         socket.join(room);
         let data = (0, rooms_1.getRoomData)(room);
@@ -68,6 +78,7 @@ io.on('connection', (socket) => {
                 io.to(old_data.room).emit('roomData', old_data);
             }
         }
+        room_to_last_interaction.set(room, Date.now());
         const user = (0, users_1.addUser)(socket.id, room);
         socket.join(room);
         let data = (0, rooms_1.getRoomData)(room);
@@ -84,6 +95,7 @@ io.on('connection', (socket) => {
         if (socket.id !== data.head) {
             return callback();
         }
+        room_to_last_interaction.set(room, Date.now());
         data.running = true;
         data.startTime = startTime;
         (0, rooms_1.updateRoomData)(room, data);
@@ -98,12 +110,12 @@ io.on('connection', (socket) => {
         if (socket.id != data.head) {
             return callback();
         }
+        room_to_last_interaction.set(room, Date.now());
         data.running = false;
         (0, rooms_1.updateRoomData)(room, data);
         io.to(room).emit('roomData', data);
     });
     // Remove user from room. if user is only room user, remove room. If user is master, set new master.
-    // TODO: Host Migration and remove room
     socket.on('disconnect', () => {
         if ((0, users_1.getUser)(socket.id) === null) {
             return;

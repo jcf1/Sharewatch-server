@@ -14,7 +14,18 @@ const app = express();
 const server = http.createServer(app);
 const io = socketio(server);
 
+const inactivityLimit = 3600000;
+const refreshRate = 60000;
 let room_to_last_interaction: Map<string,number> = new Map();
+
+setInterval(() => {
+    let now = Date.now();
+    room_to_last_interaction.forEach((t, room) => {
+        if(now - t > inactivityLimit) {
+            io.to(room).emit('inactivity', {});
+        }
+    });
+}, refreshRate);
 
 io.on('connection', (socket: Socket) => {
 
@@ -45,6 +56,8 @@ io.on('connection', (socket: Socket) => {
                 io.to(old_data.room).emit('roomData', old_data);
             }
         }
+
+        room_to_last_interaction.set(room, Date.now());
 
         const user: User = addUser(socket.id, room);
         socket.join(room);
@@ -79,6 +92,8 @@ io.on('connection', (socket: Socket) => {
             }
         }
 
+        room_to_last_interaction.set(room, Date.now());
+
         const user: User = addUser(socket.id, room);
         socket.join(room);
         let data: roomData = getRoomData(room);
@@ -99,6 +114,8 @@ io.on('connection', (socket: Socket) => {
             return callback();
         }
 
+        room_to_last_interaction.set(room, Date.now());
+
         data.running = true;
         data.startTime = startTime;
         updateRoomData(room, data);
@@ -116,6 +133,8 @@ io.on('connection', (socket: Socket) => {
         if(socket.id != data.head) {
             return callback();
         }
+
+        room_to_last_interaction.set(room, Date.now());
 
         data.running = false;
         updateRoomData(room, data);
