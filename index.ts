@@ -6,7 +6,8 @@ import { User, addUser, removeUser, getUser, getUsersInRoom } from './src/users'
 import { roomData, createRoom, removeRoom, getRoomData, updateRoomData, roomExists } from './src/rooms';
 import { Socket } from 'socket.io';
 
-const PORT = process.env.PORT || 5000;
+const hostname = "0.0.0.0"
+const PORT = 3000;
 
 const router = require('./router');
 
@@ -14,10 +15,10 @@ const app = express();
 const server = http.createServer(app);
 const io = socketio(server);
 
-const inactivityLimit = 3600000;
+// Remove any Rooms that are open but inactive for 24 hours
+const inactivityLimit = 86400000;
 const refreshRate = 60000;
 let room_to_last_interaction: Map<string,number> = new Map();
-
 setInterval(() => {
     let now = Date.now();
     room_to_last_interaction.forEach((t, room) => {
@@ -29,10 +30,13 @@ setInterval(() => {
 
 io.on('connection', (socket: Socket) => {
 
+    // Provide socket id to user.
     socket.on('get_id', ({}, callback) => {
         socket.emit('socket_id', {id: socket.id})
     });
 
+    // Create new room and send back the generated room code.
+    // Need to remove user from previous room if they are in one.
     socket.on('create', (callback) => {
         const room: string = createRoom(socket.id);
         if(room === '') {
@@ -67,6 +71,8 @@ io.on('connection', (socket: Socket) => {
         io.to(room).emit('roomData', data);
     });
 
+    // Add user to room if it exists.
+    // Need to remove user from previous room if they are in one.
     socket.on('join', ({ room }, callback) => {
         room = room.toLowerCase();
 
@@ -102,6 +108,7 @@ io.on('connection', (socket: Socket) => {
         io.to(room).emit('roomData', data);
     });
 
+    // Start all watches in the room.
     socket.on('start', ({ room, startTime }, callback) => {
         room = room.toLowerCase();
         
@@ -122,6 +129,7 @@ io.on('connection', (socket: Socket) => {
         io.to(room).emit('roomData', data);
     });
     
+    // Stop all watches in the room and reset them.
     socket.on('reset', ({ room }, callback) => {
         room = room.toLowerCase();
 
@@ -141,7 +149,9 @@ io.on('connection', (socket: Socket) => {
         io.to(room).emit('roomData', data);
     });
 
-    // Remove user from room. if user is only room user, remove room. If user is master, set new master.
+    // Remove user from room. 
+    // If user is the only user in the room, remove room.
+    // If user is head timer, assign a new head timer.
     socket.on('disconnect', () => {
         if(getUser(socket.id) === null){
             return;

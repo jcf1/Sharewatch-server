@@ -19,7 +19,6 @@ const makeRoomId = (length: number): string => {
 }
 
 const createRoom = (socket_id: string): string => {
-    
     var code = '';
     do {
         code = makeRoomId(4);
