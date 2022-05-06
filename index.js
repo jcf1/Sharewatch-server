@@ -3,6 +3,7 @@ Object.defineProperty(exports, "__esModule", { value: true });
 const express = require('express');
 const socketio = require('socket.io');
 const http = require('http');
+const cors = require('cors');
 const users_1 = require("./src/users");
 const rooms_1 = require("./src/rooms");
 const hostname = "0.0.0.0";
@@ -11,6 +12,8 @@ const router = require('./router');
 const app = express();
 const server = http.createServer(app);
 const io = socketio(server);
+app.use(router);
+app.use(cors);
 // Remove any Rooms that are open but inactive for 24 hours
 const inactivityLimit = 86400000;
 const refreshRate = 60000;
